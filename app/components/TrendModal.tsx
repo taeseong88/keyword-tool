@@ -60,7 +60,7 @@ export default function TrendModal({ keyword, onClose }: Props) {
               <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#9ca3af' }} />
               <Tooltip
-                formatter={(v: number) => [`${v}`, '검색 지수']}
+                formatter={(v) => [`${v ?? ''}`, '검색 지수']}
                 labelFormatter={l => `${l}`}
                 contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
               />
