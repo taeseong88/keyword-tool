@@ -47,15 +47,15 @@ export default function Home() {
   const [sortKey, setSortKey] = useState<SortKey>('total')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [trendKeyword, setTrendKeyword] = useState<string | null>(null)
+  const [history, setHistory] = useState<string[]>([])
 
-  async function search() {
-    if (!input.trim()) return
+  async function fetchKeywords(query: string) {
     setLoading(true)
     setError('')
     setKeywords([])
 
     try {
-      const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(input.trim())}`)
+      const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(query)}`)
       const data = await res.json()
 
       if (!res.ok) {
@@ -64,12 +64,31 @@ export default function Home() {
       }
 
       setKeywords(data.keywordList || [])
-      setSearched(input.trim())
+      setSearched(query)
+      setInput(query)
     } catch {
       setError('네트워크 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
+  }
+
+  function search() {
+    const q = input.trim()
+    if (!q) return
+    setHistory([])
+    fetchKeywords(q)
+  }
+
+  function drillDown(keyword: string) {
+    setHistory(prev => [...prev, searched])
+    fetchKeywords(keyword)
+  }
+
+  function goBack(index: number) {
+    const target = history[index]
+    setHistory(prev => prev.slice(0, index))
+    fetchKeywords(target)
   }
 
   function handleSort(key: SortKey) {
@@ -94,20 +113,18 @@ export default function Home() {
   }
 
   const sorted = [...keywords].sort((a, b) => {
-    // 컬럼 클릭 정렬 시에는 연관도 무시
     if (sortKey !== 'total') {
-      let va: number | string, vb: number | string
       if (sortKey === 'relKeyword') {
         return sortDir === 'asc'
           ? a.relKeyword.localeCompare(b.relKeyword, 'ko')
           : b.relKeyword.localeCompare(a.relKeyword, 'ko')
       }
+      let va: number, vb: number
       if (sortKey === 'pc') { va = toNum(a.monthlyPcQcCnt); vb = toNum(b.monthlyPcQcCnt) }
       else { va = toNum(a.monthlyMobileQcCnt); vb = toNum(b.monthlyMobileQcCnt) }
-      return sortDir === 'asc' ? (va as number) - (vb as number) : (vb as number) - (va as number)
+      return sortDir === 'asc' ? va - vb : vb - va
     }
 
-    // 기본 정렬: 연관도 우선, 같은 연관도 내에서 검색량 순
     const ra = relevanceScore(a.relKeyword, searched)
     const rb = relevanceScore(b.relKeyword, searched)
     if (ra !== rb) return sortDir === 'desc' ? rb - ra : ra - rb
@@ -181,10 +198,29 @@ export default function Home() {
       {/* 결과 */}
       {sorted.length > 0 && (
         <>
+          {/* 브레드크럼 내비게이션 */}
+          {history.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap mb-3 text-sm">
+              {history.map((h, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  <button
+                    onClick={() => goBack(i)}
+                    className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                  >
+                    {h}
+                  </button>
+                  <span className="text-gray-400">›</span>
+                </span>
+              ))}
+              <span className="text-gray-700 font-semibold">{searched}</span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm text-gray-600">
               <span className="font-semibold text-gray-800">"{searched}"</span> 연관 키워드{' '}
               <span className="font-semibold text-blue-600">{sorted.length}개</span>
+              <span className="ml-2 text-xs text-gray-400">키워드를 클릭하면 세부 키워드를 조회합니다</span>
             </p>
             <button
               onClick={exportCSV}
@@ -213,15 +249,23 @@ export default function Home() {
                       <SortBtn col="total" label="총 검색량" />
                     </th>
                     <th className="text-center px-4 py-3 text-gray-600 font-medium">경쟁도</th>
+                    <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sorted.map((k, i) => {
                     const total = toNum(k.monthlyPcQcCnt) + toNum(k.monthlyMobileQcCnt)
                     return (
-                      <tr key={k.relKeyword} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setTrendKeyword(k.relKeyword)}>
+                      <tr key={k.relKeyword} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 text-gray-400">{i + 1}</td>
-                        <td className="px-4 py-3 font-medium text-blue-700 hover:underline">{k.relKeyword}</td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => drillDown(k.relKeyword)}
+                            className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                          >
+                            {k.relKeyword}
+                          </button>
+                        </td>
                         <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyPcQcCnt)}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyMobileQcCnt)}</td>
                         <td className="px-4 py-3 text-right font-semibold text-gray-800">{total.toLocaleString('ko-KR')}</td>
@@ -229,6 +273,15 @@ export default function Home() {
                           <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${COMP_COLOR[k.compIdx] ?? 'text-gray-600 bg-gray-100'}`}>
                             {COMP_LABEL[k.compIdx] ?? k.compIdx}
                           </span>
+                        </td>
+                        <td className="px-2 py-3 text-center">
+                          <button
+                            onClick={() => setTrendKeyword(k.relKeyword)}
+                            title="트렌드 보기"
+                            className="text-gray-400 hover:text-blue-600 transition-colors text-base"
+                          >
+                            📈
+                          </button>
                         </td>
                       </tr>
                     )
