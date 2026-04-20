@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       }
     )
     const data = await res.json()
-    const keywords: string[] = (data.items ?? []).map((item: unknown[]) => item[0] as string)
+    const keywords: string[] = (data.items?.[0] ?? []).map((item: unknown[]) => item[0] as string)
     return NextResponse.json({ keywords })
   } catch {
     return NextResponse.json({ keywords: [] })
