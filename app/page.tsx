@@ -48,24 +48,34 @@ export default function Home() {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [trendKeyword, setTrendKeyword] = useState<string | null>(null)
   const [history, setHistory] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<string[]>([])
 
   async function fetchKeywords(query: string) {
     setLoading(true)
     setError('')
     setKeywords([])
+    setSuggestions([])
 
     try {
-      const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(query)}`)
-      const data = await res.json()
+      const [kwRes, sugRes] = await Promise.all([
+        fetch(`/api/keywords?keyword=${encodeURIComponent(query)}`),
+        fetch(`/api/suggest?q=${encodeURIComponent(query)}`),
+      ])
+      const kwData = await kwRes.json()
 
-      if (!res.ok) {
-        setError(data.error || '오류가 발생했습니다.')
+      if (!kwRes.ok) {
+        setError(kwData.error || '오류가 발생했습니다.')
         return
       }
 
-      setKeywords(data.keywordList || [])
+      setKeywords(kwData.keywordList || [])
       setSearched(query)
       setInput(query)
+
+      if (sugRes.ok) {
+        const sugData = await sugRes.json()
+        setSuggestions(sugData.keywords || [])
+      }
     } catch {
       setError('네트워크 오류가 발생했습니다.')
     } finally {
@@ -198,6 +208,24 @@ export default function Home() {
       {/* 결과 */}
       {sorted.length > 0 && (
         <>
+          {/* 자동완성 연관검색어 */}
+          {suggestions.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-gray-400 mb-2">자동완성 연관검색어</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => drillDown(s)}
+                    className="text-sm bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1 hover:bg-blue-100 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 브레드크럼 내비게이션 */}
           {history.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap mb-3 text-sm">
