@@ -16,8 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '키워드를 입력해주세요.' }, { status: 400 })
   }
 
-  // 공백 포함 키워드는 쉼표로 분리 (최대 5개)
-  const hints = keyword.trim().split(/\s+/).slice(0, 5).join(',')
+  const hints = keyword.trim()
 
   const timestamp = Date.now().toString()
   const method = 'GET'
