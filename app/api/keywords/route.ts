@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '키워드를 입력해주세요.' }, { status: 400 })
   }
 
-  const hints = keyword.trim()
+  const hints = keyword.trim().replace(/\s+/g, '')
 
   const timestamp = Date.now().toString()
   const method = 'GET'
