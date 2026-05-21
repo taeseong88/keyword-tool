@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import TrendModal from './components/TrendModal'
+import VideoDownload from './components/VideoDownload'
 
 interface KeywordData {
   relKeyword: string
@@ -38,7 +39,10 @@ function fmt(val: number | string): string {
   return n.toLocaleString('ko-KR')
 }
 
+type Tab = 'keyword' | 'video'
+
 export default function Home() {
+  const [tab, setTab] = useState<Tab>('keyword')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -176,8 +180,30 @@ export default function Home() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-gray-800 mb-2">네이버 키워드 검색량 분석</h1>
-      <p className="text-gray-500 text-sm mb-8">키워드를 입력하면 연관 키워드와 월간 검색량을 조회합니다.</p>
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">키워드 분석 도구</h1>
+
+      {/* 탭 */}
+      <div className="flex gap-1 mb-8 border-b border-gray-200">
+        {([['keyword', '🔍 키워드 검색량'], ['video', '🎬 링크드인 영상 다운로드']] as [Tab, string][]).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-5 py-2.5 text-sm font-medium rounded-t-lg transition-colors -mb-px border-b-2 ${
+              tab === key
+                ? 'border-blue-600 text-blue-600 bg-white'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* 영상 다운로드 탭 */}
+      {tab === 'video' && <VideoDownload />}
+
+      {/* 키워드 검색 탭 */}
+      {tab === 'keyword' && <>
 
       {/* 검색창 */}
       <div className="flex gap-2 mb-8">
@@ -248,7 +274,7 @@ export default function Home() {
             <p className="text-sm text-gray-600">
               <span className="font-semibold text-gray-800">"{searched}"</span> 연관 키워드{' '}
               <span className="font-semibold text-blue-600">{sorted.length}개</span>
-              <span className="ml-2 text-xs text-gray-400">키워드를 클릭하면 세부 키워드를 조회합니다</span>
+              <span className="ml-2 text-xs text-gray-400">키워드 클릭 → 트렌드 · ▶ 클릭 → 세부 키워드 조회</span>
             </p>
             <button
               onClick={exportCSV}
@@ -287,12 +313,21 @@ export default function Home() {
                       <tr key={k.relKeyword} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 text-gray-400">{i + 1}</td>
                         <td className="px-4 py-3">
-                          <button
-                            onClick={() => drillDown(k.relKeyword)}
-                            className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
-                          >
-                            {k.relKeyword}
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setTrendKeyword(k.relKeyword)}
+                              className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                            >
+                              {k.relKeyword}
+                            </button>
+                            <button
+                              onClick={() => drillDown(k.relKeyword)}
+                              title="세부 키워드 조회"
+                              className="text-gray-300 hover:text-blue-500 transition-colors text-xs flex-shrink-0"
+                            >
+                              ▶
+                            </button>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyPcQcCnt)}</td>
                         <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyMobileQcCnt)}</td>
@@ -328,6 +363,8 @@ export default function Home() {
       {!loading && searched && sorted.length === 0 && !error && (
         <p className="text-center text-gray-400 py-12">연관 키워드가 없습니다.</p>
       )}
+
+      </> /* 키워드 탭 끝 */}
     </main>
   )
 }
