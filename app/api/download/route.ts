@@ -25,8 +25,10 @@ function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string }> {
 
 export async function POST(req: NextRequest) {
   const { url } = await req.json()
-  if (!url || !url.includes('linkedin.com')) {
-    return NextResponse.json({ error: '유효한 LinkedIn URL을 입력해주세요.' }, { status: 400 })
+  const isLinkedIn = url?.includes('linkedin.com')
+  const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be')
+  if (!url || (!isLinkedIn && !isYouTube)) {
+    return NextResponse.json({ error: '유효한 LinkedIn 또는 YouTube URL을 입력해주세요.' }, { status: 400 })
   }
 
   const id = randomUUID()

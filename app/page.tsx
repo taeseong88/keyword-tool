@@ -39,7 +39,7 @@ function fmt(val: number | string): string {
   return n.toLocaleString('ko-KR')
 }
 
-type Tab = 'keyword' | 'video'
+type Tab = 'keyword' | 'linkedin' | 'youtube'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('keyword')
@@ -184,7 +184,7 @@ export default function Home() {
 
       {/* 탭 */}
       <div className="flex gap-1 mb-8 border-b border-gray-200">
-        {([['keyword', '🔍 키워드 검색량'], ['video', '🎬 링크드인 영상 다운로드']] as [Tab, string][]).map(([key, label]) => (
+        {([['keyword', '🔍 키워드 검색량'], ['linkedin', '🎬 링크드인 영상 다운로드'], ['youtube', '▶ 유튜브 영상 다운로드']] as [Tab, string][]).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -199,8 +199,11 @@ export default function Home() {
         ))}
       </div>
 
-      {/* 영상 다운로드 탭 */}
-      {tab === 'video' && <VideoDownload />}
+      {/* 링크드인 다운로드 탭 */}
+      {tab === 'linkedin' && <VideoDownload platform="linkedin" />}
+
+      {/* 유튜브 다운로드 탭 */}
+      {tab === 'youtube' && <VideoDownload platform="youtube" />}
 
       {/* 키워드 검색 탭 */}
       {tab === 'keyword' && <>

@@ -4,10 +4,28 @@ import { useState } from 'react'
 
 type Status = 'idle' | 'loading' | 'done' | 'error'
 
-export default function VideoDownload() {
+interface Props {
+  platform: 'linkedin' | 'youtube'
+}
+
+const CONFIG = {
+  linkedin: {
+    placeholder: 'https://www.linkedin.com/posts/...',
+    description: 'LinkedIn 공개 영상 URL을 붙여넣으면 MP4로 다운로드합니다.',
+    note: '* 공개 게시물 영상만 지원 · 비공개 / 로그인 필요 영상은 다운로드 불가',
+  },
+  youtube: {
+    placeholder: 'https://www.youtube.com/watch?v=... 또는 https://youtu.be/...',
+    description: 'YouTube 영상 URL을 붙여넣으면 MP4로 다운로드합니다.',
+    note: '* 공개 영상만 지원 · 연령 제한 / 멤버십 전용 영상은 다운로드 불가',
+  },
+}
+
+export default function VideoDownload({ platform }: Props) {
   const [url, setUrl] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [message, setMessage] = useState('')
+  const cfg = CONFIG[platform]
 
   async function handleDownload() {
     const trimmed = url.trim()
@@ -29,10 +47,9 @@ export default function VideoDownload() {
         return
       }
 
-      // Content-Disposition에서 파일명 추출
       const disposition = res.headers.get('Content-Disposition') ?? ''
       const match = disposition.match(/filename\*=UTF-8''(.+)/)
-      const filename = match ? decodeURIComponent(match[1]) : 'linkedin_video.mp4'
+      const filename = match ? decodeURIComponent(match[1]) : 'video.mp4'
 
       const blob = await res.blob()
       const objUrl = URL.createObjectURL(blob)
@@ -52,9 +69,7 @@ export default function VideoDownload() {
 
   return (
     <div className="max-w-2xl">
-      <p className="text-gray-500 text-sm mb-4">
-        LinkedIn 공개 영상 URL을 붙여넣으면 MP4로 다운로드합니다.
-      </p>
+      <p className="text-gray-500 text-sm mb-4">{cfg.description}</p>
 
       <div className="flex gap-2">
         <input
@@ -62,7 +77,7 @@ export default function VideoDownload() {
           value={url}
           onChange={e => { setUrl(e.target.value); setStatus('idle'); setMessage('') }}
           onKeyDown={e => e.key === 'Enter' && handleDownload()}
-          placeholder="https://www.linkedin.com/posts/..."
+          placeholder={cfg.placeholder}
           className="flex-1 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           disabled={status === 'loading'}
         />
@@ -97,9 +112,7 @@ export default function VideoDownload() {
         </div>
       )}
 
-      <p className="mt-4 text-xs text-gray-400">
-        * 공개 게시물 영상만 지원 · 비공개 / 로그인 필요 영상은 다운로드 불가
-      </p>
+      <p className="mt-4 text-xs text-gray-400">{cfg.note}</p>
     </div>
   )
 }
