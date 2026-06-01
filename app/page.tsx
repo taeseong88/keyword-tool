@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TrendModal from './components/TrendModal'
 import VideoDownload from './components/VideoDownload'
 
@@ -39,7 +39,7 @@ function fmt(val: number | string): string {
   return n.toLocaleString('ko-KR')
 }
 
-type Tab = 'keyword' | 'linkedin' | 'youtube'
+type Tab = 'keyword' | 'favorites' | 'linkedin' | 'youtube'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('keyword')
@@ -53,6 +53,14 @@ export default function Home() {
   const [trendKeyword, setTrendKeyword] = useState<string | null>(null)
   const [history, setHistory] = useState<string[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
+  const [favorites, setFavorites] = useState<KeywordData[]>([])
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('kw-favorites')
+      if (saved) setFavorites(JSON.parse(saved))
+    } catch {}
+  }, [])
 
   async function fetchKeywords(query: string) {
     setLoading(true)
@@ -85,6 +93,21 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function toggleFavorite(kw: KeywordData) {
+    setFavorites(prev => {
+      const exists = prev.some(f => f.relKeyword === kw.relKeyword)
+      const next = exists
+        ? prev.filter(f => f.relKeyword !== kw.relKeyword)
+        : [...prev, kw]
+      try { localStorage.setItem('kw-favorites', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  function isFavorite(keyword: string) {
+    return favorites.some(f => f.relKeyword === keyword)
   }
 
   function search() {
@@ -184,7 +207,12 @@ export default function Home() {
 
       {/* 탭 */}
       <div className="flex gap-1 mb-8 border-b border-gray-200">
-        {([['keyword', '🔍 키워드 검색량'], ['linkedin', '🎬 링크드인 영상 다운로드'], ['youtube', '▶ 유튜브 영상 다운로드']] as [Tab, string][]).map(([key, label]) => (
+        {([
+        ['keyword', '🔍 키워드 검색량'],
+        ['favorites', `⭐ 관심키워드${favorites.length > 0 ? ` (${favorites.length})` : ''}`],
+        ['linkedin', '🎬 링크드인 영상 다운로드'],
+        ['youtube', '▶ 유튜브 영상 다운로드'],
+      ] as [Tab, string][]).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -198,6 +226,99 @@ export default function Home() {
           </button>
         ))}
       </div>
+
+      {/* 관심키워드 탭 */}
+      {tab === 'favorites' && (
+        <div className="max-w-5xl">
+          {favorites.length === 0 ? (
+            <div className="text-center text-gray-400 py-16">
+              <p className="text-4xl mb-3">⭐</p>
+              <p className="text-sm">키워드 테이블에서 ☆ 버튼을 눌러 관심 키워드를 추가해보세요.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-600">
+                  관심 키워드 <span className="font-semibold text-blue-600">{favorites.length}개</span>
+                </p>
+                <button
+                  onClick={() => {
+                    const header = '연관키워드,PC 검색량,모바일 검색량,총 검색량,경쟁도'
+                    const rows = favorites.map(k => {
+                      const total = toNum(k.monthlyPcQcCnt) + toNum(k.monthlyMobileQcCnt)
+                      return `${k.relKeyword},${fmt(k.monthlyPcQcCnt)},${fmt(k.monthlyMobileQcCnt)},${total.toLocaleString('ko-KR')},${COMP_LABEL[k.compIdx] ?? k.compIdx}`
+                    })
+                    const csv = '﻿' + [header, ...rows].join('\n')
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url; a.download = '관심키워드.csv'; a.click()
+                    URL.revokeObjectURL(url)
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800 border border-blue-300 hover:border-blue-500 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  CSV 다운로드
+                </button>
+              </div>
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-gray-600 font-medium w-8">#</th>
+                        <th className="text-left px-4 py-3 text-gray-600 font-medium">연관 키워드</th>
+                        <th className="text-right px-4 py-3 text-gray-600 font-medium">PC 검색량</th>
+                        <th className="text-right px-4 py-3 text-gray-600 font-medium">모바일 검색량</th>
+                        <th className="text-right px-4 py-3 text-gray-600 font-medium">총 검색량</th>
+                        <th className="text-center px-4 py-3 text-gray-600 font-medium">경쟁도</th>
+                        <th className="w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {favorites.map((k, i) => {
+                        const total = toNum(k.monthlyPcQcCnt) + toNum(k.monthlyMobileQcCnt)
+                        return (
+                          <tr key={k.relKeyword} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 text-gray-400">{i + 1}</td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => setTrendKeyword(k.relKeyword)}
+                                className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                              >
+                                {k.relKeyword}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyPcQcCnt)}</td>
+                            <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyMobileQcCnt)}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-gray-800">{total.toLocaleString('ko-KR')}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${COMP_COLOR[k.compIdx] ?? 'text-gray-600 bg-gray-100'}`}>
+                                {COMP_LABEL[k.compIdx] ?? k.compIdx}
+                              </span>
+                            </td>
+                            <td className="px-2 py-3 text-center">
+                              <button
+                                onClick={() => toggleFavorite(k)}
+                                title="관심 키워드 해제"
+                                className="text-yellow-400 hover:text-gray-400 transition-colors text-base"
+                              >
+                                ★
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          {trendKeyword && (
+            <TrendModal keyword={trendKeyword} onClose={() => setTrendKeyword(null)} />
+          )}
+        </div>
+      )}
 
       {/* 링크드인 다운로드 탭 */}
       {tab === 'linkedin' && <VideoDownload platform="linkedin" />}
@@ -306,12 +427,14 @@ export default function Home() {
                       <SortBtn col="total" label="총 검색량" />
                     </th>
                     <th className="text-center px-4 py-3 text-gray-600 font-medium">경쟁도</th>
+                    <th className="w-10 text-center px-2 py-3 text-gray-600 font-medium">⭐</th>
                     <th className="w-10"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {sorted.map((k, i) => {
                     const total = toNum(k.monthlyPcQcCnt) + toNum(k.monthlyMobileQcCnt)
+                    const fav = isFavorite(k.relKeyword)
                     return (
                       <tr key={k.relKeyword} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 text-gray-400">{i + 1}</td>
@@ -339,6 +462,15 @@ export default function Home() {
                           <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${COMP_COLOR[k.compIdx] ?? 'text-gray-600 bg-gray-100'}`}>
                             {COMP_LABEL[k.compIdx] ?? k.compIdx}
                           </span>
+                        </td>
+                        <td className="px-2 py-3 text-center">
+                          <button
+                            onClick={() => toggleFavorite(k)}
+                            title={fav ? '관심 키워드 해제' : '관심 키워드 추가'}
+                            className={`text-base transition-colors ${fav ? 'text-yellow-400 hover:text-gray-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                          >
+                            {fav ? '★' : '☆'}
+                          </button>
                         </td>
                         <td className="px-2 py-3 text-center">
                           <button
