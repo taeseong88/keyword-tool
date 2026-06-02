@@ -39,7 +39,7 @@ function fmt(val: number | string): string {
   return n.toLocaleString('ko-KR')
 }
 
-type Tab = 'keyword' | 'favorites' | 'linkedin' | 'youtube'
+type Tab = 'keyword' | 'favorites' | 'linkedin' | 'youtube' | 'vimeo'
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>('keyword')
@@ -212,6 +212,7 @@ export default function Home() {
         ['favorites', `⭐ 관심키워드${favorites.length > 0 ? ` (${favorites.length})` : ''}`],
         ['linkedin', '🎬 링크드인 영상 다운로드'],
         ['youtube', '▶ 유튜브 영상 다운로드'],
+        ['vimeo', '🎥 비메오 영상 다운로드'],
       ] as [Tab, string][]).map(([key, label]) => (
           <button
             key={key}
@@ -325,6 +326,9 @@ export default function Home() {
 
       {/* 유튜브 다운로드 탭 */}
       {tab === 'youtube' && <VideoDownload platform="youtube" />}
+
+      {/* 비메오 다운로드 탭 */}
+      {tab === 'vimeo' && <VideoDownload platform="vimeo" />}
 
       {/* 키워드 검색 탭 */}
       {tab === 'keyword' && <>

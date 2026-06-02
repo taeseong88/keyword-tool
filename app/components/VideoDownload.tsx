@@ -5,7 +5,7 @@ import { useState } from 'react'
 type Status = 'idle' | 'loading' | 'done' | 'error'
 
 interface Props {
-  platform: 'linkedin' | 'youtube'
+  platform: 'linkedin' | 'youtube' | 'vimeo'
 }
 
 const CONFIG = {
@@ -18,6 +18,11 @@ const CONFIG = {
     placeholder: 'https://www.youtube.com/watch?v=... 또는 https://youtu.be/...',
     description: 'YouTube 영상 URL을 붙여넣으면 MP4로 다운로드합니다.',
     note: '* 공개 영상만 지원 · 연령 제한 / 멤버십 전용 영상은 다운로드 불가',
+  },
+  vimeo: {
+    placeholder: 'https://vimeo.com/123456789',
+    description: 'Vimeo 영상 URL을 붙여넣으면 MP4로 다운로드합니다.',
+    note: '* 공개 영상만 지원 · 비밀번호 보호 / 비공개 영상은 다운로드 불가',
   },
 }
 

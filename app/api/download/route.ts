@@ -27,8 +27,9 @@ export async function POST(req: NextRequest) {
   const { url } = await req.json()
   const isLinkedIn = url?.includes('linkedin.com')
   const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be')
-  if (!url || (!isLinkedIn && !isYouTube)) {
-    return NextResponse.json({ error: '유효한 LinkedIn 또는 YouTube URL을 입력해주세요.' }, { status: 400 })
+  const isVimeo = url?.includes('vimeo.com')
+  if (!url || (!isLinkedIn && !isYouTube && !isVimeo)) {
+    return NextResponse.json({ error: '유효한 LinkedIn, YouTube 또는 Vimeo URL을 입력해주세요.' }, { status: 400 })
   }
 
   const id = randomUUID()
