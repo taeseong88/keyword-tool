@@ -54,6 +54,9 @@ export default function Home() {
   const [history, setHistory] = useState<string[]>([])
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [favorites, setFavorites] = useState<KeywordData[]>([])
+  const [bulkInput, setBulkInput] = useState('')
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
 
   useEffect(() => {
     try {
@@ -93,6 +96,45 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleBulkAdd() {
+    const lines = bulkInput.split('\n').map(l => l.trim()).filter(Boolean)
+    const unique = [...new Set(lines)]
+    const toAdd = unique.filter(kw => !favorites.some(f => f.relKeyword === kw))
+    if (toAdd.length === 0) { setBulkOpen(false); return }
+
+    setBulkProgress({ done: 0, total: toAdd.length })
+    const results: KeywordData[] = []
+
+    for (let i = 0; i < toAdd.length; i++) {
+      const kw = toAdd[i]
+      try {
+        const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(kw)}`)
+        if (res.ok) {
+          const data = await res.json()
+          const list: KeywordData[] = data.keywordList || []
+          const match = list.find(k => k.relKeyword === kw) ?? {
+            relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0,
+          }
+          results.push(match)
+        } else {
+          results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
+        }
+      } catch {
+        results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
+      }
+      setBulkProgress({ done: i + 1, total: toAdd.length })
+    }
+
+    setFavorites(prev => {
+      const next = [...prev, ...results.filter(r => !prev.some(p => p.relKeyword === r.relKeyword))]
+      try { localStorage.setItem('kw-favorites', JSON.stringify(next)) } catch {}
+      return next
+    })
+    setBulkProgress(null)
+    setBulkInput('')
+    setBulkOpen(false)
   }
 
   function toggleFavorite(kw: KeywordData) {
@@ -231,10 +273,72 @@ export default function Home() {
       {/* 관심키워드 탭 */}
       {tab === 'favorites' && (
         <div className="max-w-5xl">
+
+          {/* 대량 등록 패널 */}
+          <div className="mb-5 border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setBulkOpen(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-sm font-medium text-gray-700"
+            >
+              <span>📋 대량 키워드 등록</span>
+              <span className="text-gray-400 text-xs">{bulkOpen ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+            {bulkOpen && (
+              <div className="p-4 bg-white">
+                <p className="text-xs text-gray-400 mb-2">키워드를 한 줄에 하나씩 입력하세요. 검색량 데이터를 자동으로 조회합니다.</p>
+                <textarea
+                  value={bulkInput}
+                  onChange={e => setBulkInput(e.target.value)}
+                  placeholder={"러닝화\n등산화\n트레킹화\n..."}
+                  rows={6}
+                  disabled={!!bulkProgress}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y disabled:bg-gray-50"
+                />
+                <div className="flex items-center justify-between mt-3">
+                  {bulkProgress ? (
+                    <div className="flex items-center gap-3 text-sm text-gray-500">
+                      <svg className="animate-spin h-4 w-4 text-blue-500" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                      </svg>
+                      <span>조회 중... {bulkProgress.done} / {bulkProgress.total}</span>
+                      <div className="w-40 bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-500 h-1.5 rounded-full transition-all"
+                          style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400">
+                      {bulkInput.split('\n').filter(l => l.trim()).length}개 키워드 입력됨
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setBulkOpen(false); setBulkInput('') }}
+                      disabled={!!bulkProgress}
+                      className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 transition-colors disabled:opacity-40"
+                    >
+                      취소
+                    </button>
+                    <button
+                      onClick={handleBulkAdd}
+                      disabled={!bulkInput.trim() || !!bulkProgress}
+                      className="text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-1.5 rounded-lg transition-colors font-medium"
+                    >
+                      등록
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {favorites.length === 0 ? (
             <div className="text-center text-gray-400 py-16">
               <p className="text-4xl mb-3">⭐</p>
-              <p className="text-sm">키워드 테이블에서 ☆ 버튼을 눌러 관심 키워드를 추가해보세요.</p>
+              <p className="text-sm">키워드 테이블에서 ☆ 버튼을 누르거나, 위 대량 등록으로 추가해보세요.</p>
             </div>
           ) : (
             <>
