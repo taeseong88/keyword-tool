@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import TrendModal from './components/TrendModal'
 import VideoDownload from './components/VideoDownload'
+import AuthModal from './components/AuthModal'
 
 interface KeywordData {
   relKeyword: string
@@ -42,6 +44,9 @@ function fmt(val: number | string): string {
 type Tab = 'keyword' | 'favorites' | 'linkedin' | 'youtube' | 'vimeo'
 
 export default function Home() {
+  const { data: session, status } = useSession()
+  const isLoggedIn = !!session?.user
+  const [authModalOpen, setAuthModalOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('keyword')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -59,12 +64,42 @@ export default function Home() {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // 로그인 상태에 따라 favorites 소스 전환
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('kw-favorites')
-      if (saved) setFavorites(JSON.parse(saved))
-    } catch {}
-  }, [])
+    if (status === 'loading') return
+    if (isLoggedIn) {
+      // DB에서 불러오기
+      fetch('/api/favorites')
+        .then(r => r.ok ? r.json() : [])
+        .then((dbFavs: KeywordData[]) => {
+          // localStorage에 미동기화된 항목 있으면 DB로 업로드 후 병합
+          try {
+            const local: KeywordData[] = JSON.parse(localStorage.getItem('kw-favorites') ?? '[]')
+            const newItems = local.filter(l => !dbFavs.some(d => d.relKeyword === l.relKeyword))
+            if (newItems.length > 0) {
+              fetch('/api/favorites', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newItems),
+              })
+              localStorage.removeItem('kw-favorites')
+              setFavorites([...dbFavs, ...newItems])
+            } else {
+              setFavorites(dbFavs)
+            }
+          } catch {
+            setFavorites(dbFavs)
+          }
+        })
+        .catch(() => {})
+    } else {
+      // 비로그인: localStorage
+      try {
+        const saved = localStorage.getItem('kw-favorites')
+        if (saved) setFavorites(JSON.parse(saved))
+      } catch {}
+    }
+  }, [isLoggedIn, status])
 
   // 최신 fetchKeywords를 ref로 유지 (popstate 클로저 문제 방지)
   const fetchKeywordsRef = useRef(fetchKeywords)
@@ -164,7 +199,11 @@ export default function Home() {
 
     setFavorites(prev => {
       const next = [...prev, ...results.filter(r => !prev.some(p => p.relKeyword === r.relKeyword))]
-      try { localStorage.setItem('kw-favorites', JSON.stringify(next)) } catch {}
+      if (isLoggedIn) {
+        fetch('/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(results) }).catch(() => {})
+      } else {
+        try { localStorage.setItem('kw-favorites', JSON.stringify(next)) } catch {}
+      }
       return next
     })
     setBulkProgress(null)
@@ -201,7 +240,15 @@ export default function Home() {
     }
 
     setFavorites(updated)
-    try { localStorage.setItem('kw-favorites', JSON.stringify(updated)) } catch {}
+    if (isLoggedIn) {
+      fetch('/api/favorites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {})
+    } else {
+      try { localStorage.setItem('kw-favorites', JSON.stringify(updated)) } catch {}
+    }
     setRefreshing(false)
   }
 
@@ -211,7 +258,15 @@ export default function Home() {
       const next = exists
         ? prev.filter(f => f.relKeyword !== kw.relKeyword)
         : [...prev, kw]
-      try { localStorage.setItem('kw-favorites', JSON.stringify(next)) } catch {}
+      if (isLoggedIn) {
+        if (exists) {
+          fetch('/api/favorites', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keyword: kw.relKeyword }) }).catch(() => {})
+        } else {
+          fetch('/api/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([kw]) }).catch(() => {})
+        }
+      } else {
+        try { localStorage.setItem('kw-favorites', JSON.stringify(next)) } catch {}
+      }
       return next
     })
   }
@@ -318,7 +373,37 @@ export default function Home() {
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">키워드 분석 도구</h1>
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">키워드 분석 도구</h1>
+        <div className="flex items-center gap-2">
+          {status === 'loading' ? null : isLoggedIn ? (
+            <>
+              <span className="text-sm text-gray-500">{session.user.email}</span>
+              <button
+                onClick={() => signOut()}
+                className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              로그인 / 회원가입
+            </button>
+          )}
+        </div>
+      </div>
+
+      {authModalOpen && (
+        <AuthModal
+          onClose={() => setAuthModalOpen(false)}
+          onSuccess={() => {}}
+        />
+      )}
 
       {/* 탭 */}
       <div className="flex gap-1 mb-8 border-b border-gray-200">
@@ -346,6 +431,22 @@ export default function Home() {
       {/* 관심키워드 탭 */}
       {tab === 'favorites' && (
         <div className="max-w-5xl">
+
+          {/* 비로그인 안내 배너 */}
+          {!isLoggedIn && (
+            <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-blue-800">로그인하면 기기 간 동기화됩니다</p>
+                <p className="text-xs text-blue-600 mt-0.5">지금은 이 브라우저에만 저장됩니다. 로그인 시 자동으로 업로드됩니다.</p>
+              </div>
+              <button
+                onClick={() => setAuthModalOpen(true)}
+                className="shrink-0 text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+              >
+                로그인
+              </button>
+            </div>
+          )}
 
           {/* 대량 등록 패널 */}
           <div className="mb-5 border border-gray-200 rounded-xl overflow-hidden">
