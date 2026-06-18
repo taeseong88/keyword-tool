@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TrendModal from './components/TrendModal'
 import VideoDownload from './components/VideoDownload'
 
@@ -64,6 +64,39 @@ export default function Home() {
       const saved = localStorage.getItem('kw-favorites')
       if (saved) setFavorites(JSON.parse(saved))
     } catch {}
+  }, [])
+
+  // 최신 fetchKeywords를 ref로 유지 (popstate 클로저 문제 방지)
+  const fetchKeywordsRef = useRef(fetchKeywords)
+  fetchKeywordsRef.current = fetchKeywords
+
+  // 초기 로드 시 URL의 q 파라미터 복원
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q')
+    if (q) {
+      fetchKeywordsRef.current(q)
+    }
+    // 현재 위치를 히스토리에 등록 (뒤로 가기로 돌아올 빈 상태 보장)
+    window.history.replaceState({ query: q ?? null, appHistory: [] }, '')
+  }, [])
+
+  // 브라우저 뒤로/앞으로 가기 처리
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      const state = e.state as { query: string | null; appHistory: string[] } | null
+      if (state?.query) {
+        setHistory(state.appHistory ?? [])
+        fetchKeywordsRef.current(state.query)
+      } else {
+        setKeywords([])
+        setSearched('')
+        setInput('')
+        setHistory([])
+        setSuggestions([])
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
   async function fetchKeywords(query: string) {
@@ -186,17 +219,22 @@ export default function Home() {
     const q = input.trim()
     if (!q) return
     setHistory([])
+    window.history.pushState({ query: q, appHistory: [] }, '', `?q=${encodeURIComponent(q)}`)
     fetchKeywords(q)
   }
 
   function drillDown(keyword: string) {
-    setHistory(prev => [...prev, searched])
+    const newHistory = [...history, searched]
+    setHistory(newHistory)
+    window.history.pushState({ query: keyword, appHistory: newHistory }, '', `?q=${encodeURIComponent(keyword)}`)
     fetchKeywords(keyword)
   }
 
   function goBack(index: number) {
     const target = history[index]
-    setHistory(prev => prev.slice(0, index))
+    const newHistory = history.slice(0, index)
+    setHistory(newHistory)
+    window.history.pushState({ query: target, appHistory: newHistory }, '', `?q=${encodeURIComponent(target)}`)
     fetchKeywords(target)
   }
 
