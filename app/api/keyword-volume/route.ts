@@ -10,7 +10,7 @@ function getSignature(timestamp: string, method: string, uri: string): string {
   return crypto.createHmac('sha256', SECRET_KEY).update(message).digest('base64')
 }
 
-// relKeywords 파라미터로 특정 키워드들의 정확한 검색량 조회 (최대 5개 묶음)
+// hintKeywords 쉼표 묶음으로 최대 5개 키워드의 검색량 일괄 조회
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get('keywords') ?? ''
   const keywords = raw.split(',').map(k => k.trim()).filter(Boolean).slice(0, 5)
@@ -23,8 +23,7 @@ export async function GET(req: NextRequest) {
   const uri = '/keywordstool'
   const signature = getSignature(timestamp, method, uri)
 
-  const params = keywords.map(k => `relKeywords=${encodeURIComponent(k)}`).join('&')
-  const apiUrl = `https://api.naver.com/keywordstool?${params}&showDetail=1`
+  const apiUrl = `https://api.naver.com/keywordstool?hintKeywords=${encodeURIComponent(keywords.join(','))}&showDetail=1`
 
   const res = await fetch(apiUrl, {
     headers: {

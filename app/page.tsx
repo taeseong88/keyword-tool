@@ -108,32 +108,25 @@ export default function Home() {
     setBulkProgress({ done: 0, total: toAdd.length })
     const results: KeywordData[] = []
 
-    // 5개씩 묶어서 relKeywords API 호출 (hintKeywords 대신 정확한 검색량 조회)
-    const BATCH = 5
-    for (let i = 0; i < toAdd.length; i += BATCH) {
-      const batch = toAdd.slice(i, i + BATCH)
+    const norm = (s: string) => s.normalize('NFC').trim().replace(/\s+/g, '').toLowerCase()
+    for (let i = 0; i < toAdd.length; i++) {
+      const kw = toAdd[i]
       try {
-        const res = await fetch(`/api/keyword-volume?keywords=${batch.map(encodeURIComponent).join(',')}`)
+        const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(kw)}`)
         if (res.ok) {
           const data = await res.json()
           const list: KeywordData[] = data.keywordList || []
-          for (const kw of batch) {
-            const match = list.find(k => k.relKeyword === kw)
-              ?? list.find(k => k.relKeyword.replace(/\s/g, '') === kw.replace(/\s/g, ''))
-              ?? { relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 }
-            results.push(match)
-          }
+          const match = list.find(k => k.relKeyword === kw)
+            ?? list.find(k => norm(k.relKeyword) === norm(kw))
+            ?? (list.length > 0 ? list[0] : null)
+          results.push(match ? { ...match, relKeyword: kw } : { relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
         } else {
-          for (const kw of batch) {
-            results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
-          }
-        }
-      } catch {
-        for (const kw of batch) {
           results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
         }
+      } catch {
+        results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
       }
-      setBulkProgress({ done: Math.min(i + BATCH, toAdd.length), total: toAdd.length })
+      setBulkProgress({ done: i + 1, total: toAdd.length })
     }
 
     setFavorites(prev => {
@@ -149,23 +142,26 @@ export default function Home() {
   async function refreshFavorites() {
     if (favorites.length === 0) return
     setRefreshing(true)
-    const BATCH = 5
-    const updated = [...favorites]
-    for (let i = 0; i < favorites.length; i += BATCH) {
-      const batch = favorites.slice(i, i + BATCH)
+    const norm = (s: string) => s.normalize('NFC').trim().replace(/\s+/g, '').toLowerCase()
+    const updated = favorites.map(f => ({ ...f }))
+
+    for (let i = 0; i < updated.length; i++) {
+      const kw = updated[i].relKeyword
       try {
-        const res = await fetch(`/api/keyword-volume?keywords=${batch.map(k => encodeURIComponent(k.relKeyword)).join(',')}`)
+        const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(kw)}`)
         if (res.ok) {
           const data = await res.json()
           const list: KeywordData[] = data.keywordList || []
-          for (const orig of batch) {
-            const fresh = list.find(k => k.relKeyword === orig.relKeyword)
-              ?? list.find(k => k.relKeyword.replace(/\s/g, '') === orig.relKeyword.replace(/\s/g, ''))
-            if (fresh) updated[updated.findIndex(u => u.relKeyword === orig.relKeyword)] = fresh
+          const match = list.find(k => k.relKeyword === kw)
+            ?? list.find(k => norm(k.relKeyword) === norm(kw))
+            ?? (list.length > 0 ? list[0] : null)
+          if (match) {
+            updated[i] = { ...match, relKeyword: kw }
           }
         }
       } catch {}
     }
+
     setFavorites(updated)
     try { localStorage.setItem('kw-favorites', JSON.stringify(updated)) } catch {}
     setRefreshing(false)
