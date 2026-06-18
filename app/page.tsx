@@ -57,6 +57,7 @@ export default function Home() {
   const [bulkInput, setBulkInput] = useState('')
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
     try {
@@ -107,24 +108,32 @@ export default function Home() {
     setBulkProgress({ done: 0, total: toAdd.length })
     const results: KeywordData[] = []
 
-    for (let i = 0; i < toAdd.length; i++) {
-      const kw = toAdd[i]
+    // 5개씩 묶어서 relKeywords API 호출 (hintKeywords 대신 정확한 검색량 조회)
+    const BATCH = 5
+    for (let i = 0; i < toAdd.length; i += BATCH) {
+      const batch = toAdd.slice(i, i + BATCH)
       try {
-        const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(kw)}`)
+        const res = await fetch(`/api/keyword-volume?keywords=${batch.map(encodeURIComponent).join(',')}`)
         if (res.ok) {
           const data = await res.json()
           const list: KeywordData[] = data.keywordList || []
-          const match = list.find(k => k.relKeyword === kw) ?? {
-            relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0,
+          for (const kw of batch) {
+            const match = list.find(k => k.relKeyword === kw)
+              ?? list.find(k => k.relKeyword.replace(/\s/g, '') === kw.replace(/\s/g, ''))
+              ?? { relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 }
+            results.push(match)
           }
-          results.push(match)
         } else {
-          results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
+          for (const kw of batch) {
+            results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
+          }
         }
       } catch {
-        results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
+        for (const kw of batch) {
+          results.push({ relKeyword: kw, monthlyPcQcCnt: 0, monthlyMobileQcCnt: 0, compIdx: '', plAvgDepth: 0 })
+        }
       }
-      setBulkProgress({ done: i + 1, total: toAdd.length })
+      setBulkProgress({ done: Math.min(i + BATCH, toAdd.length), total: toAdd.length })
     }
 
     setFavorites(prev => {
@@ -135,6 +144,31 @@ export default function Home() {
     setBulkProgress(null)
     setBulkInput('')
     setBulkOpen(false)
+  }
+
+  async function refreshFavorites() {
+    if (favorites.length === 0) return
+    setRefreshing(true)
+    const BATCH = 5
+    const updated = [...favorites]
+    for (let i = 0; i < favorites.length; i += BATCH) {
+      const batch = favorites.slice(i, i + BATCH)
+      try {
+        const res = await fetch(`/api/keyword-volume?keywords=${batch.map(k => encodeURIComponent(k.relKeyword)).join(',')}`)
+        if (res.ok) {
+          const data = await res.json()
+          const list: KeywordData[] = data.keywordList || []
+          for (const orig of batch) {
+            const fresh = list.find(k => k.relKeyword === orig.relKeyword)
+              ?? list.find(k => k.relKeyword.replace(/\s/g, '') === orig.relKeyword.replace(/\s/g, ''))
+            if (fresh) updated[updated.findIndex(u => u.relKeyword === orig.relKeyword)] = fresh
+          }
+        }
+      } catch {}
+    }
+    setFavorites(updated)
+    try { localStorage.setItem('kw-favorites', JSON.stringify(updated)) } catch {}
+    setRefreshing(false)
   }
 
   function toggleFavorite(kw: KeywordData) {
@@ -343,8 +377,18 @@ export default function Home() {
           ) : (
             <>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 flex items-center gap-2">
                   관심 키워드 <span className="font-semibold text-blue-600">{favorites.length}개</span>
+                  <button
+                    onClick={refreshFavorites}
+                    disabled={refreshing}
+                    title="검색량 새로고침"
+                    className="text-gray-400 hover:text-blue-500 disabled:opacity-40 transition-colors"
+                  >
+                    {refreshing
+                      ? <svg className="animate-spin h-3.5 w-3.5 inline" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                      : '🔄'}
+                  </button>
                 </p>
                 <button
                   onClick={() => {
