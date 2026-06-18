@@ -543,10 +543,20 @@ export default function Home() {
           )}
 
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-600">
-              <span className="font-semibold text-gray-800">"{searched}"</span> 연관 키워드{' '}
-              <span className="font-semibold text-blue-600">{sorted.length}개</span>
-              <span className="ml-2 text-xs text-gray-400">키워드 클릭 → 트렌드 · ▶ 클릭 → 세부 키워드 조회</span>
+            <p className="text-sm text-gray-600 flex items-center gap-2 flex-wrap">
+              <span>
+                <span className="font-semibold text-gray-800">"{searched}"</span> 연관 키워드{' '}
+                <span className="font-semibold text-blue-600">{sorted.length}개</span>
+              </span>
+              {(sortKey !== 'total' || sortDir !== 'desc') && (
+                <button
+                  onClick={() => { setSortKey('total'); setSortDir('desc') }}
+                  className="text-xs text-orange-600 hover:text-orange-800 border border-orange-300 hover:border-orange-500 px-2 py-0.5 rounded-full transition-colors"
+                >
+                  ↺ 기본 정렬로 복원
+                </button>
+              )}
+              <span className="text-xs text-gray-400">키워드 클릭 → 트렌드 · ▶ 클릭 → 세부 키워드 조회</span>
             </p>
             <button
               onClick={exportCSV}
