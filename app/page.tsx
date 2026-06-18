@@ -464,12 +464,21 @@ export default function Home() {
                           <tr key={k.relKeyword} className="hover:bg-gray-50 transition-colors">
                             <td className="px-4 py-3 text-gray-400">{i + 1}</td>
                             <td className="px-4 py-3">
-                              <button
-                                onClick={() => setTrendKeyword(k.relKeyword)}
-                                className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
-                              >
-                                {k.relKeyword}
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => setTrendKeyword(k.relKeyword)}
+                                  className="font-medium text-blue-700 hover:text-blue-900 hover:underline text-left"
+                                >
+                                  {k.relKeyword}
+                                </button>
+                                <button
+                                  onClick={() => { setTab('keyword'); drillDown(k.relKeyword) }}
+                                  title="세부 키워드 조회"
+                                  className="text-gray-300 hover:text-blue-500 transition-colors text-xs flex-shrink-0"
+                                >
+                                  ▶
+                                </button>
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyPcQcCnt)}</td>
                             <td className="px-4 py-3 text-right text-gray-600">{fmt(k.monthlyMobileQcCnt)}</td>
