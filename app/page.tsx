@@ -177,8 +177,13 @@ export default function Home() {
     setRefreshing(true)
     const norm = (s: string) => s.normalize('NFC').trim().replace(/\s+/g, '').toLowerCase()
     const updated = favorites.map(f => ({ ...f }))
+    // 검색량이 0인 항목만 재조회
+    const zeroIndices = updated
+      .map((f, i) => ({ f, i }))
+      .filter(({ f }) => toNum(f.monthlyPcQcCnt) === 0 && toNum(f.monthlyMobileQcCnt) === 0)
+      .map(({ i }) => i)
 
-    for (let i = 0; i < updated.length; i++) {
+    for (const i of zeroIndices) {
       const kw = updated[i].relKeyword
       try {
         const res = await fetch(`/api/keywords?keyword=${encodeURIComponent(kw)}`)
@@ -413,16 +418,22 @@ export default function Home() {
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm text-gray-600 flex items-center gap-2">
                   관심 키워드 <span className="font-semibold text-blue-600">{favorites.length}개</span>
-                  <button
-                    onClick={refreshFavorites}
-                    disabled={refreshing}
-                    title="검색량 새로고침"
-                    className="text-gray-400 hover:text-blue-500 disabled:opacity-40 transition-colors"
-                  >
-                    {refreshing
-                      ? <svg className="animate-spin h-3.5 w-3.5 inline" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-                      : '🔄'}
-                  </button>
+                  {(() => {
+                    const zeroCount = favorites.filter(f => toNum(f.monthlyPcQcCnt) === 0 && toNum(f.monthlyMobileQcCnt) === 0).length
+                    return zeroCount > 0 ? (
+                      <button
+                        onClick={refreshFavorites}
+                        disabled={refreshing}
+                        title={`검색량 0인 ${zeroCount}개 키워드 재조회`}
+                        className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-700 disabled:opacity-40 transition-colors border border-orange-300 hover:border-orange-500 px-2 py-0.5 rounded-full"
+                      >
+                        {refreshing
+                          ? <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                          : '🔄'}
+                        {refreshing ? '조회 중...' : `0인 키워드 ${zeroCount}개 재조회`}
+                      </button>
+                    ) : null
+                  })()}
                 </p>
                 <button
                   onClick={() => {
