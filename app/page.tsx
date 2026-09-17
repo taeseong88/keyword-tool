@@ -32,6 +32,10 @@ function toNum(val: number | string): number {
   return Number(val) || 0
 }
 
+function csvField(val: string): string {
+  return `"${val.replace(/"/g, '""')}"`
+}
+
 function fmt(val: number | string): string {
   if (val === '< 10') return '10 미만'
   const n = Number(val)
@@ -117,7 +121,43 @@ export default function Home() {
         return
       }
 
-      setKeywords(kwData.keywordList || [])
+      const allKeywords: KeywordData[] = kwData.keywordList || []
+
+      // 대표 연관키워드로 자동 재검색해서 연관검색어 풀 넓히기
+      // (단, 후보 키워드 자신의 연관검색어 목록에 원래 검색어가 상위권으로 다시 나타나는 경우만 채택 —
+      //  '세라믹'처럼 우연히 한 번 걸쳐 나왔을 뿐 실제로는 무관한 주제로 확산되는 것을 막기 위함)
+      const norm = (s: string) => s.normalize('NFC').trim().replace(/\s+/g, '').toLowerCase()
+      const queryNorm = norm(query)
+      const MUTUAL_RANK_LIMIT = 100
+      const topRelated = [...allKeywords]
+        .filter(k => norm(k.relKeyword) !== queryNorm)
+        .sort((a, b) => (toNum(b.monthlyPcQcCnt) + toNum(b.monthlyMobileQcCnt)) - (toNum(a.monthlyPcQcCnt) + toNum(a.monthlyMobileQcCnt)))
+        .slice(0, 3)
+
+      if (topRelated.length > 0) {
+        const expandResults = await Promise.all(
+          topRelated.map(k =>
+            fetch(`/api/keywords?keyword=${encodeURIComponent(k.relKeyword)}`)
+              .then(r => (r.ok ? r.json() : { keywordList: [] }))
+              .catch(() => ({ keywordList: [] }))
+          )
+        )
+        const seen = new Set(allKeywords.map(k => norm(k.relKeyword)))
+        for (const res of expandResults) {
+          const list = (res.keywordList || []) as KeywordData[]
+          const mutualRank = list.findIndex(k => norm(k.relKeyword) === queryNorm)
+          if (mutualRank === -1 || mutualRank > MUTUAL_RANK_LIMIT) continue
+          for (const item of list) {
+            const key = norm(item.relKeyword)
+            if (!seen.has(key)) {
+              seen.add(key)
+              allKeywords.push(item)
+            }
+          }
+        }
+      }
+
+      setKeywords(allKeywords)
       setSearched(query)
       setInput(query)
 
@@ -304,7 +344,8 @@ export default function Home() {
     const header = '연관키워드,PC 검색량,모바일 검색량,총 검색량,경쟁도'
     const rows = sorted.map(k => {
       const total = toNum(k.monthlyPcQcCnt) + toNum(k.monthlyMobileQcCnt)
-      return `${k.relKeyword},${fmt(k.monthlyPcQcCnt)},${fmt(k.monthlyMobileQcCnt)},${total.toLocaleString('ko-KR')},${COMP_LABEL[k.compIdx] ?? k.compIdx}`
+      return [k.relKeyword, fmt(k.monthlyPcQcCnt), fmt(k.monthlyMobileQcCnt), total.toLocaleString('ko-KR'), COMP_LABEL[k.compIdx] ?? k.compIdx]
+        .map(csvField).join(',')
     })
     const csv = '\uFEFF' + [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -440,7 +481,8 @@ export default function Home() {
                     const header = '연관키워드,PC 검색량,모바일 검색량,총 검색량,경쟁도'
                     const rows = favorites.map(k => {
                       const total = toNum(k.monthlyPcQcCnt) + toNum(k.monthlyMobileQcCnt)
-                      return `${k.relKeyword},${fmt(k.monthlyPcQcCnt)},${fmt(k.monthlyMobileQcCnt)},${total.toLocaleString('ko-KR')},${COMP_LABEL[k.compIdx] ?? k.compIdx}`
+                      return [k.relKeyword, fmt(k.monthlyPcQcCnt), fmt(k.monthlyMobileQcCnt), total.toLocaleString('ko-KR'), COMP_LABEL[k.compIdx] ?? k.compIdx]
+                        .map(csvField).join(',')
                     })
                     const csv = '﻿' + [header, ...rows].join('\n')
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
