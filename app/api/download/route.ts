@@ -4,18 +4,14 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { readFile, unlink, readdir } from 'fs/promises'
 import { randomUUID } from 'crypto'
+import { ensureDownloader } from '../../lib/downloader'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120
 
-function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string }> {
+async function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string }> {
+  const executable = await ensureDownloader()
   return new Promise((resolve, reject) => {
-    // Windows에서는 Python/PATH 설정 없이 프로젝트의 독립 실행 파일을 사용한다.
-    const executable = process.env.YT_DLP_PATH || (
-      process.platform === 'win32'
-        ? join(process.cwd(), 'tools', 'yt-dlp.exe')
-        : 'yt-dlp'
-    )
     const proc = spawn(executable, ['--ignore-config', ...args], { windowsHide: true })
     let stdout = ''
     let stderr = ''
@@ -27,7 +23,7 @@ function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string }> {
     })
     proc.on('error', (error: NodeJS.ErrnoException) => {
       reject(error.code === 'ENOENT'
-        ? new Error('영상 다운로드 실행 파일을 찾을 수 없습니다. tools/yt-dlp.exe 또는 YT_DLP_PATH 설정을 확인해주세요.')
+        ? new Error('영상 다운로드 도구를 실행할 수 없습니다. 서버의 실행 권한 및 YT_DLP_PATH 설정을 확인해주세요.')
         : error)
     })
   })
