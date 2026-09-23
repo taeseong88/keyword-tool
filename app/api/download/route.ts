@@ -10,7 +10,13 @@ export const maxDuration = 120
 
 function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const proc = spawn('python', ['-m', 'yt_dlp', ...args])
+    // Windows에서는 Python/PATH 설정 없이 프로젝트의 독립 실행 파일을 사용한다.
+    const executable = process.env.YT_DLP_PATH || (
+      process.platform === 'win32'
+        ? join(process.cwd(), 'tools', 'yt-dlp.exe')
+        : 'yt-dlp'
+    )
+    const proc = spawn(executable, ['--ignore-config', ...args], { windowsHide: true })
     let stdout = ''
     let stderr = ''
     proc.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
@@ -19,7 +25,11 @@ function runYtDlp(args: string[]): Promise<{ stdout: string; stderr: string }> {
       if (code === 0) resolve({ stdout, stderr })
       else reject(new Error(stderr || stdout || `exit code ${code}`))
     })
-    proc.on('error', reject)
+    proc.on('error', (error: NodeJS.ErrnoException) => {
+      reject(error.code === 'ENOENT'
+        ? new Error('영상 다운로드 실행 파일을 찾을 수 없습니다. tools/yt-dlp.exe 또는 YT_DLP_PATH 설정을 확인해주세요.')
+        : error)
+    })
   })
 }
 
